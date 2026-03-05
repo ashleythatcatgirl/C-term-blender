@@ -21,6 +21,9 @@
 const unsigned int INIT_WIDTH = 960;
 const unsigned int INIT_HEIGHT = 640;
 
+const char OBJECT_DIRECTORY[] = "../Files/Objects/";
+const char TEXTURE_DIRECTORY[] = "../Files/Textures/";
+const char SHADER_DIRECTORY[] = "../Source/Shaders/";
 
 int main(int argc, char **argv) {
 	struct Window window;
@@ -55,9 +58,9 @@ int main(int argc, char **argv) {
 	glm_vec3_copy((vec3){0.0, 1.0, 0.0}, camera.up);
 	camera.turnSpeed = 2.5;
 	camera.moveSpeed = 2.5;
-	camera.sprint = false;
 	camera.yaw = -1.57;
 	camera.pitch = 0.0;
+	camera.zoom = 90;
 	
 	ParseArgs(argc, argv, &input);
 
@@ -215,8 +218,16 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
 
-	vec3 cubePos[4] = {{-2.0, 1.0, 0.0}, {2.0, 1.0, -1.0},
-			   {2.0, 1.0, 2.0}, {-1.0, -2.0, 1.0}, };
+	vec3 cubePos[8] = {
+		{-2.0, 1.0, 0.0},
+		{2.0, 1.0, -1.0},
+		{2.0, 1.0, 2.0},
+		{-3.0, -2.0, 0.0},
+		{0.0, -1.5, 0.0},
+		{4.0, 0.0, 1.0},
+		{3.0, -1.0, -2.0},
+		{-1.0, 4.0, -3.0},
+	};
 
 	transforms->modelLoc = glGetUniformLocation(shaderProgram, "model");
 	transforms->viewLoc = glGetUniformLocation(shaderProgram, "view");
@@ -257,7 +268,7 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 		for (int i = 0; i < sizeof(cubePos) / sizeof(vec3); i++) {
 			glm_mat4_identity(transforms->model);
 			glm_translate(transforms->model, cubePos[i]);
-			glm_rotate(transforms->model, glfwGetTime(), (vec3){1.0, 1.0, 1.0});
+			glm_rotate(transforms->model, glfwGetTime(), cubePos[i]);
 
 			glUniformMatrix4fv(transforms->modelLoc, 1, GL_FALSE, (float*)transforms->model);
 			glDrawArrays(GL_TRIANGLES, 0, model->vCount);
@@ -329,7 +340,12 @@ void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
 	if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
 		if (camera->pitch + turnSpeed < 1.57) camera->pitch += turnSpeed;
 	}
-
+	if(glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+		if (camera->zoom - 1 > 1) camera->zoom -= 1;
+	}
+	if(glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS) {
+		if (camera->zoom + 1 < 90) camera->zoom += 1;
+	}
 	camera->direction[0] = cos(camera->yaw) * cos(camera->pitch);
 	camera->direction[1] = sin(camera->pitch);
 	camera->direction[2] = sin(camera->yaw) * cos(camera->pitch);
@@ -369,7 +385,7 @@ char* GetShaderContent(const char* fileName) {
 int LoadObjects(Objects *objects) {
 	printf("\n->Reading object data..\n");
 	struct dirent *de;
-	DIR *dr = opendir("Objects/");
+	DIR *dr = opendir(OBJECT_DIRECTORY);
 	if (dr == NULL) return 1;
 	printf("  ->Found object folder!\n");
 
@@ -391,7 +407,7 @@ int LoadObjects(Objects *objects) {
 		InitializeObjectData(&objects->object[obj]);
 	}
 
-	dr = opendir("Objects/");
+	dr = opendir(OBJECT_DIRECTORY);
 
 	for (int obj = 0; (de = readdir(dr)) != NULL;) {
 		if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
@@ -423,69 +439,7 @@ char* ReadObjectData(Object *object, char *fileName) {
 	FILE *fPtr = fopen(fileName, "r");
 	if (fPtr == NULL) return 0;
 
-/*
-o Plane
-v -1.000000 -1.000000 -0.000000
-v 1.000000 -1.000000 -0.000000
-v -1.000000 1.000000 0.000000
-v 1.000000 1.000000 0.000000
-vn -0.0000 -0.0000 1.0000
-vt 0.000000 0.000000
-vt 1.000000 0.000000
-vt 1.000000 1.000000
-vt 0.000000 1.000000
-s 0
-f 1/1/1 2/2/1 4/3/1 3/4/1
-*/
-
-	/*while (fgets(buffer, 128, fPtr) != NULL) {
-		for (int i = 0; buffer[i] != ' ' && i < 3; i++) {
-			typeBuf[i] = buffer[i];
-			typeBuf[i + 1] = '\0';
-		}
-
-		if (strcmp(typeBuf, "v")) {
-			sscanf(buffer, "%s %f %f %f", NULL,
-			&object->vArray[object->vCount][0], &object->vArray[object->vCount][1], &object->vArray[object->vCount][2]);
-			object->vCount++;
-		}
-		else if (strcmp(typeBuf, "vn")) {
-			object->vnCount++;
-		}
-		else if (strcmp(typeBuf, "vt")) {
-			sscanf(buffer, "%s %f %f", NULL,
-			&object->vArray[vtOffset * (object->vtCount + 1)], &object->vArray[1]);
-			object->vtCount++;
-		}
-		else if (strcmp(typeBuf, "f")) {
-			sscanf(buffer, "%s %d/%d/%d", NULL,
-			&object->fArray[object->fCount], &object->fArray[object->fCount], &object->fArray[object->fCount]);
-			object->fCount++;
-		}
-		else continue;
-	}*/
-
 	return 0;
-}
-
-unsigned int GetType(char buffer) {
-	unsigned int type;
-
-	switch (buffer) {
-		case 'o':
-			type = 1;
-			break;
-		case 'v':
-			type = 2;
-			break;
-		case 'f':
-			type = 5;
-			break;
-		default:
-			type = 0;
-			break;
-	}
-	return type;
 }
 
 void InitializeObjectData(Object *object) {
@@ -527,7 +481,7 @@ void SetObjectData(Object *object) {
 int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 	printf("\n->Reading texture data..\n");
 	struct dirent *de;
-	DIR *dr = opendir("Textures/");
+	DIR *dr = opendir(TEXTURE_DIRECTORY);
 	if (dr == NULL) return 1;
 	printf("  ->Found texture folder!\n");
 
@@ -548,7 +502,7 @@ int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 	textures->texture = (Texture*)malloc(sizeof(Texture) * textures->count);
 	if (textures->texture == NULL) return -1;
 
-	dr = opendir("Textures/");
+	dr = opendir(TEXTURE_DIRECTORY);
 
 	for (int tex = 0; (de = readdir(dr)) != NULL;) {
 		if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
@@ -556,7 +510,7 @@ int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 		if ((end = strchr(de->d_name, '.')) == NULL) continue;
 		if (strcmp(end, ".png") && strcmp(end,".jpg")) continue;
 
-		strcpy(textures->texture[tex].name, "Textures/");
+		strcpy(textures->texture[tex].name, TEXTURE_DIRECTORY);
 		strcat(textures->texture[tex].name, de->d_name);
 		printf("    ->Texture[%d]: %s\n", tex, textures->texture[tex].name);
 		tex++;
@@ -567,6 +521,7 @@ int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 	unsigned char *data;
 	int textureWidth, textureHeight, colorChannels;
 
+	stbi_set_flip_vertically_on_load(true);
 	printf("\n->Setting texture data..\n");
 	for (int i = 0; i < textures->count; i++) {
 		printf("  ->Texture[%d]\n", i);

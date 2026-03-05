@@ -1,7 +1,6 @@
 #include <GLFW/glfw3.h>
 #include "Include/cglm/cglm.h"
 
-
 typedef struct Window {
 	int width;
 	int height;
