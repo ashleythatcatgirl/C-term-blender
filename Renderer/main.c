@@ -1,6 +1,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "Include/cglm/util.h"
+#include "Include/cglm/vec3.h"
 #include "Include/glad.c"
 #include "main.h"
 #include "verticies.c"
@@ -18,6 +20,7 @@
 
 const unsigned int INIT_WIDTH = 960;
 const unsigned int INIT_HEIGHT = 640;
+
 
 int main(int argc, char **argv) {
 	struct Window window;
@@ -45,6 +48,16 @@ int main(int argc, char **argv) {
 	transforms.modelLoc = 0;
 	transforms.viewLoc = 0;
 	transforms.projectionLoc = 0;
+
+	struct Camera camera;
+	glm_vec3_copy((vec3){0.0, 0.0, 3.0}, camera.position);
+	glm_vec3_copy((vec3){0.0, 0.0, -1.0}, camera.front);
+	glm_vec3_copy((vec3){0.0, 1.0, 0.0}, camera.up);
+	camera.turnSpeed = 2.5;
+	camera.moveSpeed = 2.5;
+	camera.sprint = false;
+	camera.yaw = -1.57;
+	camera.pitch = 0.0;
 	
 	ParseArgs(argc, argv, &input);
 
@@ -123,7 +136,6 @@ int main(int argc, char **argv) {
 
 	printf("Initializing object vertex data..\n");
 
-	unsigned int VAO, VBO, EBO;
 	glGenVertexArrays(1, &model.VAO);
 	glGenBuffers(1, &model.VBO);
 	glGenBuffers(1, &model.EBO);
@@ -174,12 +186,13 @@ int main(int argc, char **argv) {
 	glUseProgram(shaderProgram);
 
 	printf("transformations.. \n");
+
 	printf("Loading successful, press enter to continue..");
 	getchar();
 
 	int width, height;
 	printf("Opened window, press ESC to exit\n");
-	RenderLoop(&window, shaderProgram, &input, &model, &textures, &transforms);
+	RenderLoop(&window, shaderProgram, &input, &model, &textures, &transforms, &camera);
 
 	printf("Closed window\n");
 	printf("Exiting program...\n");
@@ -193,7 +206,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *model, Textures *textures, Transforms *transforms) {
+int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *model, Textures *textures, Transforms *transforms, Camera *camera) {
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -202,11 +215,25 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
 
-	while(!glfwWindowShouldClose(window->frame)) {	
-		glfwGetFramebufferSize(window->frame, &window->width, &window->height);
-		processInput(window->frame);
+	vec3 cubePos[4] = {{-2.0, 1.0, 0.0}, {2.0, 1.0, -1.0},
+			   {2.0, 1.0, 2.0}, {-1.0, -2.0, 1.0}, };
 
-		glClearColor(0.5, 0.5, 0.55, 1.0);
+	transforms->modelLoc = glGetUniformLocation(shaderProgram, "model");
+	transforms->viewLoc = glGetUniformLocation(shaderProgram, "view");
+	transforms->projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+
+	float deltaTime = 0.0;
+	float lastFrame = 0.0;
+	float currentFrame = 0.0;
+	while(!glfwWindowShouldClose(window->frame)) {	
+		currentFrame = glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
+		glfwGetFramebufferSize(window->frame, &window->width, &window->height);
+		processInput(window->frame, camera, deltaTime);
+
+		glClearColor(0.5, 0.5, 0.6, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		for (int tex = 0; tex < textures->count; tex++) {
@@ -216,22 +243,25 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 
 		glUseProgram(shaderProgram);
 
-		glm_mat4_identity(transforms->model);
-		glm_rotate(transforms->model, 2 * glfwGetTime(), (vec3){1.0, 1.0, 1.0});
 		glm_mat4_identity(transforms->view);
-		glm_translate(transforms->view, (vec3){0.0, 0.0, -2.0});
-		glm_mat4_identity(transforms->projection);
-		glm_perspective(glm_rad(90), (float)window->width/(float)window->height, 0.1, 100.0, transforms->projection);
+		glm_vec3_add(camera->position, camera->front, camera->target);
+		glm_lookat(camera->position, camera->target, camera->up, transforms->view);
 
-		transforms->modelLoc = glGetUniformLocation(shaderProgram, "model");
-		glUniformMatrix4fv(transforms->modelLoc, 1, GL_FALSE, (float*)transforms->model);
-		transforms->viewLoc = glGetUniformLocation(shaderProgram, "view");
+		glm_mat4_identity(transforms->projection);
+		glm_perspective(glm_rad(camera->zoom), (float)window->width/(float)window->height, 0.1, 100.0, transforms->projection);
+
 		glUniformMatrix4fv(transforms->viewLoc, 1, GL_FALSE, (float*)transforms->view);
-		transforms->projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 		glUniformMatrix4fv(transforms->projectionLoc, 1, GL_FALSE, (float*)transforms->projection);
 
 		glBindVertexArray(model->VAO);
-		glDrawArrays(GL_TRIANGLES, 0, model->vCount);
+		for (int i = 0; i < sizeof(cubePos) / sizeof(vec3); i++) {
+			glm_mat4_identity(transforms->model);
+			glm_translate(transforms->model, cubePos[i]);
+			glm_rotate(transforms->model, glfwGetTime(), (vec3){1.0, 1.0, 1.0});
+
+			glUniformMatrix4fv(transforms->modelLoc, 1, GL_FALSE, (float*)transforms->model);
+			glDrawArrays(GL_TRIANGLES, 0, model->vCount);
+		}
 
 		/*for (int obj = 0; obj < objects->count; obj++) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects->object[obj].EBO);
@@ -245,10 +275,65 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 	return 0;
 }
 
-void processInput(GLFWwindow *window) {
+void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
+	float moveSpeed;
+	if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+		moveSpeed = 2 * camera->moveSpeed * deltaTime;
+	} else {
+		moveSpeed = camera->moveSpeed * deltaTime;
+	}
+	float turnSpeed = camera->turnSpeed * deltaTime;
+	vec3 move;
+
 	if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
+
+	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+		glm_vec3_scale(camera->front, moveSpeed, move);
+		glm_vec3_add(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+		glm_vec3_scale(camera->front, moveSpeed, move);
+		glm_vec3_sub(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+		glm_cross(camera->front, camera->up, camera->right);
+		glm_normalize(camera->right);
+		glm_vec3_scale(camera->right, moveSpeed, move);
+		glm_vec3_sub(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+		glm_cross(camera->front, camera->up, camera->right);
+		glm_normalize(camera->right);
+		glm_vec3_scale(camera->right, moveSpeed, move);
+		glm_vec3_add(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+		glm_vec3_scale(camera->up, moveSpeed, move);
+		glm_vec3_add(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+		glm_vec3_scale(camera->up, moveSpeed, move);
+		glm_vec3_sub(camera->position, move, camera->position);	
+	}
+	if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+		camera->yaw -= turnSpeed;
+	}
+	if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+		camera->yaw += turnSpeed;
+	}
+	if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+		if (camera->pitch - turnSpeed > -1.57) camera->pitch -= turnSpeed;
+	}
+	if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+		if (camera->pitch + turnSpeed < 1.57) camera->pitch += turnSpeed;
+	}
+
+	camera->direction[0] = cos(camera->yaw) * cos(camera->pitch);
+	camera->direction[1] = sin(camera->pitch);
+	camera->direction[2] = sin(camera->yaw) * cos(camera->pitch);
+	glm_normalize_to(camera->direction, camera->front);
 }
 
 char* GetShaderContent(const char* fileName) {
@@ -484,7 +569,7 @@ int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 
 	printf("\n->Setting texture data..\n");
 	for (int i = 0; i < textures->count; i++) {
-		printf("  ->Texture[%d]: %s\n", i, textures->texture[i].name);
+		printf("  ->Texture[%d]\n", i);
 		glGenTextures(1, &textures->texture[i].memory);
 		glBindTexture(GL_TEXTURE_2D, textures->texture[i].memory);
 
@@ -514,7 +599,6 @@ int LoadTextures(struct Textures *textures, unsigned int shaderProgram) {
 		strcpy(textureName, "texture");
 		sprintf(num, "%d", tex); 
 		strcat(textureName, num);
-		printf("%s\n", textureName);
 		glUniform1i(glGetUniformLocation(shaderProgram, textureName), tex);
 	}
 

@@ -69,6 +69,26 @@ typedef struct Transforms {
 	int projectionLoc;
 } Transforms;
 
+typedef struct Camera {
+	vec3 position;
+	vec3 target;
+	vec3 front;
+	vec3 up;
+	vec3 right;
+
+	vec3 direction;
+
+	float pitch;
+	float yaw;
+
+	float moveSpeed;
+	float turnSpeed;
+
+	float zoom;
+
+	bool sprint;
+} Camera;
+
 int ParseArgs(int argc, char **argv, struct Input *input);
 
 char* GetShaderContent(const char* fileName);
@@ -80,8 +100,8 @@ int ParseOBJFile(Object *object);
 
 int LoadTextures(Textures *textures, unsigned int shaderProgram);
 
-int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *model, Textures *textures, Transforms *transforms);
-void processInput(GLFWwindow *window);
+int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *model, Textures *textures, Transforms *transforms, Camera *camera);
+void processInput(GLFWwindow *window, Camera *camera, float deltaTime);
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
