@@ -72,7 +72,6 @@ typedef struct Camera {
 	vec3 position;
 	vec3 target;
 	vec3 front;
-	vec3 up;
 	vec3 right;
 
 	vec3 direction;
@@ -80,13 +79,28 @@ typedef struct Camera {
 	float pitch;
 	float yaw;
 
-	float moveSpeed;
-	float turnSpeed;
-
 	float zoom;
 
-	bool sprint;
+	float moveSpeed;
+	float turnSpeed;
 } Camera;
+
+typedef struct Mouse {
+	float lastX;
+	float lastY;
+
+	float xOffset;
+	float yOffset;
+
+	float sensitivity;
+
+	bool firstMouse;
+} Mouse;
+
+typedef struct Controls {
+	Camera *camera;
+	Mouse *mouse;
+} Controls;
 
 int ParseArgs(int argc, char **argv, struct Input *input);
 
@@ -104,5 +118,9 @@ void processInput(GLFWwindow *window, Camera *camera, float deltaTime);
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void mouse_callback(GLFWwindow* window, double xPos, double yPos);
+void scroll_callback(GLFWwindow* window, double xOffset, double yOffset);
 
 void FreeMemory(Objects *objects, Textures *textures);
+
+void InitializeStructs(Window *window, Input *input, Textures *textures, Objects *objects, Model *model, Transforms *transforms, Camera* camera, Mouse *mouse, Controls *controls);

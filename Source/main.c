@@ -25,41 +25,19 @@ const char SHADER_DIRECTORY[] = "../Source/Shaders/";
 
 int main(int argc, char **argv) {
 	struct Window window;
-	window.width = INIT_WIDTH;
-	window.height = INIT_HEIGHT;
-	window.frame = NULL;
-
 	struct Input input;
-	input.options = 0;
 
 	struct Textures textures;
-	textures.count = 0;
-	textures.texture = NULL;
-
 	struct Objects objects;
-	objects.count = 0;
-	objects.object = NULL;
-
 	struct Model model;
-	model.vCount = 36;
-	model.verticies = verticies;
-	model.indices = indices;
-
 	struct Transforms transforms;
-	transforms.modelLoc = 0;
-	transforms.viewLoc = 0;
-	transforms.projectionLoc = 0;
 
 	struct Camera camera;
-	glm_vec3_copy((vec3){0.0, 0.0, 3.0}, camera.position);
-	glm_vec3_copy((vec3){0.0, 0.0, -1.0}, camera.front);
-	glm_vec3_copy((vec3){0.0, 1.0, 0.0}, camera.up);
-	camera.turnSpeed = 2.5;
-	camera.moveSpeed = 2.5;
-	camera.yaw = -1.57;
-	camera.pitch = 0.0;
-	camera.zoom = 90;
+	struct Mouse mouse;
+	struct Controls controls;
 	
+	InitializeStructs(&window, &input, &textures, &objects, &model, &transforms, &camera, &mouse, &controls);
+
 	ParseArgs(argc, argv, &input);
 
 	glfwInit();
@@ -67,25 +45,26 @@ int main(int argc, char **argv) {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-
 	printf("Window initializiation..\n");
 	window.frame = glfwCreateWindow(window.width, window.height, "C-term blender", NULL, NULL);
-
 	if (window.frame == NULL) {
 		printf("Window creation fail\n");
 		glfwTerminate();
 		return -1;
 	}
 
+	glfwSetWindowUserPointer(window.frame, (void*)&controls);
+
 	glfwMakeContextCurrent(window.frame);
 	glfwSetFramebufferSizeCallback(window.frame, framebuffer_size_callback);  
+	glfwSetCursorPosCallback(window.frame, mouse_callback);  
+	glfwSetScrollCallback(window.frame, scroll_callback);
 
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-	{
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
 		printf("GLAD fail\n");
 		glfwTerminate();
 		return -1;
-	}  
+	}
 
 
 	printf("Compiling shaders..\n");
@@ -208,6 +187,8 @@ int main(int argc, char **argv) {
 }
 
 int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *model, Textures *textures, Transforms *transforms, Camera *camera) {
+	glfwSetInputMode(window->frame, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
+
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -254,7 +235,7 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 
 		glm_mat4_identity(transforms->view);
 		glm_vec3_add(camera->position, camera->front, camera->target);
-		glm_lookat(camera->position, camera->target, camera->up, transforms->view);
+		glm_lookat(camera->position, camera->target, (vec3){0.0, 1.0, 0.0}, transforms->view);
 
 		glm_mat4_identity(transforms->projection);
 		glm_perspective(glm_rad(camera->zoom), (float)window->width/(float)window->height, 0.1, 100.0, transforms->projection);
@@ -285,6 +266,10 @@ int RenderLoop(Window *window, unsigned int shaderProgram, Input *input, Model *
 }
 
 void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
+	if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		glfwSetWindowShouldClose(window, true);
+	}
+
 	float moveSpeed;
 	if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
 		moveSpeed = 2 * camera->moveSpeed * deltaTime;
@@ -294,9 +279,6 @@ void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
 	float turnSpeed = camera->turnSpeed * deltaTime;
 	vec3 move;
 
-	if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-		glfwSetWindowShouldClose(window, true);
-	}
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
 		glm_vec3_scale(camera->front, moveSpeed, move);
@@ -307,30 +289,31 @@ void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
 		glm_vec3_sub(camera->position, move, camera->position);	
 	}
 	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		glm_cross(camera->front, camera->up, camera->right);
+		glm_cross(camera->front, (vec3){0.0, 1.0, 0.0}, camera->right);
 		glm_normalize(camera->right);
 		glm_vec3_scale(camera->right, moveSpeed, move);
 		glm_vec3_sub(camera->position, move, camera->position);	
 	}
 	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		glm_cross(camera->front, camera->up, camera->right);
+		glm_cross(camera->front, (vec3){0.0, 1.0, 0.0}, camera->right);
 		glm_normalize(camera->right);
 		glm_vec3_scale(camera->right, moveSpeed, move);
 		glm_vec3_add(camera->position, move, camera->position);	
 	}
 	if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-		glm_vec3_scale(camera->up, moveSpeed, move);
+		glm_vec3_scale((vec3){0.0, 1.0, 0.0}, moveSpeed, move);
 		glm_vec3_add(camera->position, move, camera->position);	
 	}
 	if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-		glm_vec3_scale(camera->up, moveSpeed, move);
+		glm_vec3_scale((vec3){0.0, 1.0, 0.0}, moveSpeed, move);
 		glm_vec3_sub(camera->position, move, camera->position);	
+	}
+
+	if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+		camera->yaw += turnSpeed;
 	}
 	if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
 		camera->yaw -= turnSpeed;
-	}
-	if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-		camera->yaw += turnSpeed;
 	}
 	if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
 		if (camera->pitch - turnSpeed > -1.57) camera->pitch -= turnSpeed;
@@ -338,12 +321,14 @@ void processInput(GLFWwindow *window, Camera *camera, float deltaTime) {
 	if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
 		if (camera->pitch + turnSpeed < 1.57) camera->pitch += turnSpeed;
 	}
+
 	if(glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
 		if (camera->zoom - 1 > 1) camera->zoom -= 1;
 	}
 	if(glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS) {
 		if (camera->zoom + 1 < 90) camera->zoom += 1;
 	}
+
 	camera->direction[0] = cos(camera->yaw) * cos(camera->pitch);
 	camera->direction[1] = sin(camera->pitch);
 	camera->direction[2] = sin(camera->yaw) * cos(camera->pitch);
@@ -597,3 +582,77 @@ void FreeMemory(Objects *objects, Textures *textures) {
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
 } 
+
+void mouse_callback(GLFWwindow* window, double xPos, double yPos) {
+	Controls *controls = glfwGetWindowUserPointer(window);
+	if (controls->mouse->firstMouse) {
+		controls->mouse->lastX = xPos;
+		controls->mouse->lastY = yPos;
+
+		controls->mouse->firstMouse = false;
+	}
+
+	controls->mouse->xOffset = xPos - controls->mouse->lastX;
+	controls->mouse->yOffset = controls->mouse->lastY - yPos;
+	controls->mouse->xOffset *= controls->mouse->sensitivity;
+	controls->mouse->yOffset *= controls->mouse->sensitivity;
+
+	controls->mouse->lastX = xPos;
+	controls->mouse->lastY = yPos;
+	
+	controls->camera->yaw += controls->mouse->xOffset;
+	if (controls->camera->pitch + controls->mouse->yOffset < 1.57
+	&& controls->camera->pitch + controls->mouse->yOffset > -1.57) controls->camera->pitch += controls->mouse->yOffset;
+
+	controls->camera->direction[0] = cos(controls->camera->yaw) * cos(controls->camera->pitch);
+	controls->camera->direction[1] = sin(controls->camera->pitch);
+	controls->camera->direction[2] = sin(controls->camera->yaw) * cos(controls->camera->pitch);
+	glm_normalize_to(controls->camera->direction, controls->camera->front);
+}
+
+void scroll_callback(GLFWwindow *window, double xOffset, double yOffset) {
+	Controls *controls = glfwGetWindowUserPointer(window);
+
+	if (controls->camera->zoom - yOffset < 90
+	&& controls->camera->zoom - yOffset > 1) controls->camera->zoom -= yOffset;
+}
+
+void InitializeStructs(Window *window, Input *input, Textures *textures, Objects *objects, Model *model, Transforms *transforms, Camera* camera, Mouse *mouse, Controls *controls) {
+	window->width = INIT_WIDTH;
+	window->height = INIT_HEIGHT;
+	window->frame = NULL;
+
+	input->options = 0;
+
+	textures->count = 0;
+	textures->texture = NULL;
+
+	objects->count = 0;
+	objects->object = NULL;
+
+	model->vCount = 36;
+	model->verticies = verticies;
+	model->indices = indices;
+
+	transforms->modelLoc = 0;
+	transforms->viewLoc = 0;
+	transforms->projectionLoc = 0;
+
+	glm_vec3_copy((vec3){0.0, 0.0, 3.0}, camera->position);
+	glm_vec3_copy((vec3){0.0, 0.0, -1.0}, camera->front);
+	camera->turnSpeed = 2.5;
+	camera->moveSpeed = 2.5;
+	camera->yaw = -1.57;
+	camera->pitch = 0.0;
+	camera->zoom = 90;
+
+	mouse->lastX = (float)INIT_WIDTH / 2;
+	mouse->lastY = (float)INIT_HEIGHT / 2;
+	mouse->xOffset = 0;
+	mouse->yOffset = 0;
+	mouse->sensitivity = 0.01;
+	mouse->firstMouse = true;
+
+	controls->camera = camera;
+	controls->mouse = mouse;
+}
